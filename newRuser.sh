@@ -41,9 +41,9 @@ docker run -d \
   -m $mem \
   -v /var/lib/docker/vfs/dir/$user:/home/$user \
   -v /var/lib/sss/pipes/:/var/lib/sss/pipes/:rw \
+  --name $user \
   -e USERID=$uid \
   -e ROOT=$root \
-  --name $user \
   --tmpfs /tmp:rw,exec,nosuid,size=100g \
   qaeco_lab2
 

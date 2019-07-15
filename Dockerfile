@@ -59,10 +59,6 @@ RUN    apt-get update \
          python3-setuptools \
          qpdf \
          software-properties-common \
-         sssd \
-         sssd-krb5-common \
-         sssd-tools \
-         sudo \
          supervisor \
          tk8.6-dev \
          texinfo \
@@ -73,7 +69,6 @@ RUN    apt-get update \
          texlive-humanities \
          texlive-latex-extra \
          unzip \
-         vim-tiny \
          xfonts-base \
          xvfb \
          zip \
@@ -214,11 +209,10 @@ RUN    mkdir -p /var/log/supervisor /var/run/sshd \
     && git config --system push.default simple \
     && git config --system url.'https://github.com/'.insteadOf git://github.com/
         
-RUN DEBIAN_FRONTEND=noninteractive \
-        && apt-get update && apt-get -y install sssd \
-        sssd-krb5-common \
-        sssd-tools \
-        sudo
+RUN    apt-get update && apt-get -y install sssd \
+       sssd-krb5-common \
+       sssd-tools \
+       sudo
 
 # Open ports
 EXPOSE 8787
