@@ -1,0 +1,276 @@
+THIS IS THE ADMINISTRATOR WORK LOG FOR BOAB - CREATED 12 JULY 2019
+
+POSTGRES Server Installation:
+
+# Update all existing sources and packages
+sudo apt update && sudo apt -y upgrade
+
+# Add the repository key
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+
+# Get linux release and add repository
+RELEASE=$(lsb_release -cs)
+echo "deb http://apt.postgresql.org/pub/repos/apt/ ${RELEASE}"-pgdg main | sudo tee  /etc/apt/sources.list.d/pgdg.list
+
+# Update all existing sources and packages again
+sudo apt update && sudo apt -y upgrade
+
+# Install Postgres and postGIS
+sudo apt -y install postgresql-11-postgis-2.5
+
+# Install GDAL
+sudo apt-get install gdal-bin
+
+# Create a directory for the database data:
+sudo mkdir /data/pg_data
+sudo chown postgres:postgres /data/pg_data
+
+# Stop the server
+sudo service /etc/init.d/postgresql stop
+
+# Edit configuration
+sudo nano /etc/postgresql/11/main/environment
+  # Add the lines:
+POSTGIS_ENABLE_OUTDB_RASTERS=1
+POSTGIS_GDAL_ENABLED_DRIVERS=ENABLE_ALL
+
+sudo nano /etc/postgresql/11/main/postgresql.conf
+  # Change:
+data_directory = '/var/lib/postgresql/11/main'
+<to>
+data_directory = '/data/pg_data'
+<and>
+#listen_addresses = 'localhost'
+<to>
+listen_addresses = '*'
+<and>
+shared_buffers = 128MB
+<to>
+shared_buffers = 64GB
+<and>
+#temp_buffers = 8MB
+<to>
+temp_buffers = 64GB
+<and>
+#work_mem = 4MB
+<to>
+work_mem = 64GB
+<and>
+#max_prepared_transactions = 0
+<to>
+max_prepared_transactions = 64
+<and>
+#max_worker_processes = 8
+<to>
+max_worker_processes = 20
+<and>
+#max_parallel_workers = 8
+<to>
+max_parallel_workers = 20
+<and>
+#log_directory = 'log'
+<to>
+log_directory = '/var/log'
+<and>
+#log_truncate_on_rotation = off
+<to>
+log_truncate_on_rotation = on
+<and>
+#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+<to>
+log_filename = 'postgresql-%a.log'
+<and>
+#log_rotation_age = 1d
+<to>
+log_rotation_age = 10d
+<and>
+#log_rotation_size = 10MB
+<to>
+log_rotation_size = 100MB
+<and>
+#autovacuum = on
+<to>
+autovacuum = on
+
+sudo nano /etc/postgresql/11/main/pg_hba.conf
+  # Change:
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            md5
+<to>
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            md5
+host    all             all             172.17.0.1/16           md5
+host    all             all             0.0.0.0/0               md5
+  # Note: the ip 172.17.0.1/16 is the docker host - where the server is running, this is obtained with 'ip a'
+
+# Initiate the data directory change
+sudo -u postgres /usr/lib/postgresql/11/bin/initdb -D /data/pg_data
+
+# Start the postgres service:
+sudo /etc/init.d/postgresql start
+
+# Login to database
+sudo -u postgres psql postgres
+  # Enable extensions:
+postgres=# CREATE EXTENSION postgis;
+postgres=# CREATE EXTENSION postgis_topology;
+  # And create a new user who will be able to access the database:
+postgres=# CREATE USER qaeco WITH SUPERUSER CREATEDB CREATEROLE PASSWORD 'Qpostgres15';
+  # And create a new database:
+postgres=# CREATE DATABASE qaeco_spatial WITH OWNER qaeco;
+postgres=# \l
+postgres=# \connect qaeco_spatial
+postgres=# CREATE EXTENSION postgis;
+postgres=# CREATE EXTENSION postgis_topology;
+postgres=# \q
+
+# Restart the postgres service:
+sudo /etc/init.d/postgresql restart
+
+# Restore databases from previous backup - begin on line 33 to prevent errors
+awk 'NR >= 33' /home/pg_dumpall.sql | sudo -u postgres psql -X -v ON_ERROR_STOP=1 -1
+
+General software installation:
+
+# Install Gnu screen in case admins want to use this
+sudo apt-get update && sudo apt-get install screen
+
+# add Will Morris's .screenrc file
+git clone https://gist.github.com/7b3b38cfca2492e8418d.git ~/screenrc && cp ~/screenrc/.screenrc ~/.screenrc && rm -rf ~/screenrc
+
+# Install htop, sqlite3, pip, and docker custodian
+sudo apt-get update && sudo apt-get install htop
+sudo apt-get update && sudo apt-get install sqlite3
+sudo apt-get update && sudo apt-get install python3-pip
+sudo pip3 install git+https://github.com/Yelp/docker-custodian.git
+
+# Install logrotate and setup cron
+sudo apt-get update && sudo apt-get install logrotate
+
+# Make the following changes to /etc/logrotate.conf:
+"
+# uncomment this if you want your log files compressed
+compress
+
+# no packages own wtmp and btmp -- we'll rotate them here
+/var/log/wtmp {
+    monthly
+    create 0664 root utmp
+        minsize 1M
+    rotate 1
+}
+"
+
+# We need to add logrotate to cron. Open crontab:
+sudo crontab -e
+# and add the following entry (run logrotate at 5AM daily)
+0 5 * * * /usr/sbin/logrotate /etc/logrotate.conf
+
+# Then add the following to three separate files:
+"
+/var/log/messages {
+    rotate 5
+    daily
+}
+"
+# Add to etc/logrotate.d/messages, etc/logrotate.d/syslog, and etc/logrotate.d/kern.log. Might need to create these files.
+
+# Install ctop
+sudo wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop
+sudo mv ctop /usr/local/bin/
+sudo chmod +x /usr/local/bin/ctop
+
+# Install Netstat to monitor containers from a browser
+sudo apt-get update
+sudo apt-get install zlib1g-dev uuid-dev libmnl-dev gcc make autoconf autoconf-archive autogen automake pkg-config curl
+sudo apt-get install python python-yaml python-mysqldb python-psycopg2 nodejs lm-sensors netcat
+git clone https://github.com/firehol/netdata.git --depth=1 ~/netdata
+cd ~/netdata
+sudo ./netdata-installer.sh
+
+
+Docker installation:
+# Add jessie backports repo to install docker
+sudo apt-get install apt-transport-https ca-certificates
+sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+sudo su root -c 'echo "deb https://apt.dockerproject.org/repo debian-jessie main" > /etc/apt/sources.list.d/docker.list'
+
+# Install docker
+sudo apt-get update && sudo apt-get install docker.engine
+
+# Move docker to the /data partition
+sudo systemctl stop docker && \
+sudo mv /var/lib/docker /data/docker && \
+sudo ln -s /data/docker /var/lib/docker && \
+sudo systemctl start docker
+
+
+Docker setup:
+# Edit grub to allow memory limits in docker containers. Open grub config file:
+sudo nano /etc/default/grub
+# and change the GRUB_CMDLINE_LINUX="" line to GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"
+
+# Update grub
+sudo update-grub
+
+# And reboot the server
+sudo reboot
+
+# Configure nginx:
+# Copy default config file and link this to sites enabled
+sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/boab.qaeco.com
+sudo ln -s /etc/nginx/sites-available/boab.qaeco.com /etc/nginx/sites-enabled/
+# Remove default server block
+sudo rm /etc/nginx/sites-enabled/default
+
+# Edit /etc/nginx/nginx.conf to allow large uploads via web browser.
+sudo nano /etc/nginx/nginx.conf
+# immediately below "http{ ", add
+client_max_body_size 10000M;
+client_body_timeout 100000s;
+client_body_buffer_size 128k;
+client_body_in_file_only on;
+client_body_temp_path /data/nginx/tmp/;
+send_timeout 100000s;
+
+# Create some require dirs and restart the web server finalise these changes
+sudo mkdir /data/nginx && sudo mkdir /data/nginx/tmp
+sudo systemctl restart nginx
+
+# Configure the uni proxy: set the environment variables
+### DON'T NEED THIS NOW
+sudo echo 'export http_proxy="http://wwwproxy.unimelb.edu.au:8000/"' > /etc/profile.d/proxy.sh
+sudo echo 'export https_proxy="http://wwwproxy.unimelb.edu.au:8000/"' >> /etc/profile.d/proxy.sh
+sudo chmod +x /etc/profile.d/proxy.sh
+
+# And then with 
+sudo visudo 
+# add the following line:
+Defaults env_keep += "http_proxy https_proxy"
+
+# Configure docker to use the university proxy
+# Possibly don't need this anymore?
+sudo mkdir /etc/systemd/system/docker.service.d
+sudo su root -c "echo $'[Service]\nEnvironment=\"HTTP_PROXY=http://wwwproxy.unimelb.edu.au:8000/\"' > /etc/systemd/system/docker.service.d/http-proxy.conf"
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+# Copy all files from the qaecology github repo
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/supervisord.conf
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/Dockerfile
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/addSrvBlock.sh
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/newRuser.sh
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/sshd_config
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/stop-supervisor.sh
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/supervisord.conf
+sudo wget https://raw.githubusercontent.com/qaecology/boab/master/userconf.sh
+
+# Copy local (zipped) versions of NetLogo, MaxEnt, and Landis to the server and move to /usr/local/bin
+scp ZIPPED_NETLOGO_DIR USER@boab.qaeco.com:/home/unimelb.edu.au/USER
+sudo mv ~/ZIPPED_NETLOGO_DIR /usr/local/bin/.
+sudo tar -xzvf ZIPPED_NETLOGO_DIR
+sudo rm ZIPPED_NETLOGO_DIR
+# repeat for Landis and MaxEnt
+
+# Build Docker image from Dockerfile
+sudo docker image build -t qaeco_lab
