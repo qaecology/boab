@@ -45,7 +45,7 @@ docker run -d \
   -e USERID=$uid \
   -e ROOT=$root \
   --tmpfs /tmp:rw,exec,nosuid,size=100g \
-  qaeco_lab2
+  qaeco_lab
 
 sleep 1
 
