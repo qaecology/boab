@@ -180,12 +180,12 @@ sudo wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-lin
 sudo mv ctop /usr/local/bin/
 sudo chmod +x /usr/local/bin/ctop
 
-# Install Netstat to monitor containers from a browser
+# Install Netstat to monitor containers from a browser (https://www.digitalocean.com/community/tutorials/how-to-set-up-real-time-performance-monitoring-with-netdata-on-ubuntu-16-04) Note, central IT will also need to allow traffic through port 19999
 sudo apt-get update
 sudo apt-get install zlib1g-dev uuid-dev libmnl-dev gcc make autoconf autoconf-archive autogen automake pkg-config curl
 sudo apt-get install python python-yaml python-mysqldb python-psycopg2 nodejs lm-sensors netcat
-git clone https://github.com/firehol/netdata.git --depth=1 ~/netdata
-cd ~/netdata
+git clone https://github.com/firehol/netdata.git --depth=1 /home/netdata
+cd /home/netdata
 sudo ./netdata-installer.sh
 
 
